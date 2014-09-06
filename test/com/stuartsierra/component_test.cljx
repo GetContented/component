@@ -1,13 +1,19 @@
 (ns com.stuartsierra.component-test
-  (:require [clojure.test :refer (deftest is are)]
-            [clojure.set :refer (map-invert)]
-            [com.stuartsierra.component :as component]))
+  (:require #+clj  [clojure.test :as t :refer (deftest is are)]
+            #+cljs [cemerick.cljs.test]
+                   [clojure.set :refer (map-invert)]
+                   [com.stuartsierra.component :as component])
+  #+cljs (:require-macros [cemerick.cljs.test :refer [deftest is are testing with-test test-var]]))
 
 (def ^:dynamic *log* nil)
 
+#+cljs (enable-console-print!)
+
 (defn- log [& args]
-  (when (thread-bound? #'*log*)
-    (set! *log* (conj *log* args))))
+  #+clj  (when (thread-bound? #'*log*)
+           (set! *log* (conj *log* args)))
+  #+cljs (set! *log* (conj *log* args))
+  )
 
 (defn- ordering
   "Given an ordered collection of messages, returns a map from the
@@ -38,7 +44,8 @@
     (assoc this ::started? false)))
 
 (defn component-a []
-  (->ComponentA (rand-int Integer/MAX_VALUE)))
+  (->ComponentA (rand-int #+clj  Integer/MAX_VALUE
+                          #+cljs 9007199254740992)))
 
 (defrecord ComponentB [state a]
   component/Lifecycle
@@ -53,7 +60,8 @@
 
 (defn component-b []
   (component/using
-    (map->ComponentB {:state (rand-int Integer/MAX_VALUE)})
+    (map->ComponentB {:state (rand-int #+clj  Integer/MAX_VALUE
+                          #+cljs 9007199254740992)})
     [:a]))
 
 (defrecord ComponentC [state a b]
@@ -71,7 +79,8 @@
 
 (defn component-c []
   (component/using
-    (map->ComponentC {:state (rand-int Integer/MAX_VALUE)})
+    (map->ComponentC {:state (rand-int #+clj  Integer/MAX_VALUE
+                          #+cljs 9007199254740992)})
     [:a :b]))
 
 (defrecord ComponentD [state my-c b]
@@ -88,7 +97,8 @@
     (assoc this ::started? false)))
 
 (defn component-d []
-  (map->ComponentD {:state (rand-int Integer/MAX_VALUE)}))
+  (map->ComponentD {:state (rand-int #+clj  Integer/MAX_VALUE
+                          #+cljs 9007199254740992)}))
 
 (defrecord ComponentE [state]
   component/Lifecycle
@@ -100,7 +110,8 @@
     (assoc this ::started? false)))
 
 (defn component-e []
-  (map->ComponentE {:state (rand-int Integer/MAX_VALUE)}))
+  (map->ComponentE {:state (rand-int #+clj  Integer/MAX_VALUE
+                          #+cljs 9007199254740992)}))
 
 (defrecord System1 [d a e c b]  ; deliberately scrambled order
   component/Lifecycle
@@ -120,13 +131,12 @@
                        :my-c :c})
                  :e (component-e)}))
 
-(defmacro with-log [& body]
-  `(binding [*log* []]
-     ~@body
-     *log*))
-
 (deftest components-start-in-order
-  (let [log (with-log (component/start (system-1)))]
+  (let [log
+
+  (binding [*log* []]
+  (component/start (system-1))
+  *log*)]
     (are [k1 k2] (before? log k1 k2)
          'ComponentA.start 'ComponentB.start
          'ComponentA.start 'ComponentC.start
@@ -170,7 +180,7 @@
   ([error]
      (try (component/start
            (assoc (system-1) :c (error-start-c error)))
-          (catch Exception e e))))
+          (catch #+clj Exception #+cljs js/Error e e))))
 
 (deftest error-thrown-with-partial-system
   (let [ex (setup-error)]
@@ -184,7 +194,8 @@
 (deftest error-thrown-with-cause
   (let [error (ex-info "Boom!" {})
         ex (setup-error error)]
-    (is (identical? error (.getCause ^Exception ex)))))
+    (println "error: " error " is not identical to ex? " ex)
+    (is (identical? error #+clj (.getCause ^Exception ex) #+cljs ex))))
 
 (defrecord System2b [one]
   component/Lifecycle

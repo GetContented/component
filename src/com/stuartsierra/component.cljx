@@ -12,12 +12,22 @@
   component."))
 
 ;; No-op implementation if one is not defined.
-(extend-protocol Lifecycle
-  java.lang.Object
-  (start [this]
-    this)
-  (stop [this]
-    this))
+#+clj (extend-protocol Lifecycle
+        java.lang.Object
+        (start [this]
+          this)
+        (stop [this]
+          this))
+
+#+cljs (extend-protocol Lifecycle
+          object
+          (start [this]
+            this)
+          (stop [this]
+            this))
+
+#+cljs (defn js-type [o]
+         (str (type o)))
 
 (defn dependencies
   "Returns the map of other components on which this component depends."
@@ -80,7 +90,8 @@
   (let [dependency (get system system-key)]
     (when-not dependency
       (throw (ex-info (str "Missing dependency " dependency-key
-                           " in " (.getName (class component))
+                           " in "  #+clj  (.getName (class component))
+                                   #+cljs (js-type component)
                            " expected in system at " system-key)
                       {:reason ::missing-dependency
                        :system-key system-key
@@ -95,10 +106,13 @@
              (dependencies component)))
 
 (defn- try-action [component system key f args]
-  (try (apply f component args)
-       (catch Throwable t
+  (try (cond (= f "start") (apply start component args)
+             (= f "stop")  (apply stop component args)
+             :else (apply f component args))
+       (catch #+clj Throwable #+cljs :default t
          (throw (ex-info (str "Error in component " key
-                              " in system " (.getName (class system))
+                              " in system " #+clj  (.getName (class system))
+                                            #+cljs (js-type system)
                               " calling " f)
                          {:reason ::component-function-threw-exception
                           :function f
@@ -147,7 +161,7 @@
   ([system]
      (start-system system (keys system)))
   ([system component-keys]
-     (update-system system component-keys #'start)))
+     (update-system system component-keys "start")))
 
 (defn stop-system
   "Recursively stops components in the system, in reverse dependency
@@ -157,7 +171,7 @@
   ([system]
      (stop-system system (keys system)))
   ([system component-keys]
-     (update-system-reverse system component-keys #'stop)))
+     (update-system-reverse system component-keys "stop")))
 
 (defrecord SystemMap []
   Lifecycle
@@ -173,7 +187,8 @@
   [& keyvals]
   ;; array-map doesn't check argument length (CLJ-1319)
   (when-not (even? (count keyvals))
-    (throw (IllegalArgumentException.
+    (throw ( #+clj  IllegalArgumentException.
+             #+cljs js/Error.
             "system-map requires an even number of arguments")))
   (map->SystemMap (apply array-map keyvals)))
 
